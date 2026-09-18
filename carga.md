@@ -18,6 +18,17 @@ Fija para todas las mediciones. Cambiar cualquier cosa de aquí obliga a medir t
   MiniCPM5-2B en la RTX 3050 con margen: contexto y escalera tienen que ser los mismos para todos.
 - Prefill y decode no cambian entre puntos: así, lo único que cambia es la profundidad.
 
+## Tanda
+
+- **Contexto fijo: 17408** (`--ctx-size`), igual en todos los escalones: es el primer múltiplo de 256 por
+  encima de 16384 + 512 + 128 = 17 024, y el `bf16` debería caber entero con ~455 MiB de margen (estimado).
+- Por profundidad, **1 medición de calentamiento** (se guarda marcada y no cuenta) y **5 repeticiones**.
+- Salida: un JSON por tanda con `configuracion` (fecha, modelo y su sha256, argumentos, versión de
+  llama.cpp, commit del arnés, disco, GPU, VRAM libre al empezar, sha256 de la carga), `memoria_servidor_mib`
+  y `mediciones`. Nunca dentro de este repo.
+- **Con cambios sin commit, el arnés no mide** salvo con `permitir_cambios=True`, y entonces la tanda queda
+  marcada `arnes_con_cambios: true`.
+
 ## Herramientas
 
 - **`llama-bench`**, la referencia del motor: `-p 512 -n 128 -d 0,4096,16384`. Usa tokens al azar
