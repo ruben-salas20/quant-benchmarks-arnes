@@ -3,6 +3,8 @@ name = "arnes"
 version = "0.1.0"
 description = "Mide prefill, decode, tiempo al primer token y memoria de modelos GGUF sobre llama.cpp"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "carga/LICENSE-llama.cpp"]
 authors = [
     { name = "Ruben Salas", email = "rubend.salasp@uqvirtual.edu.co" }
 ]
