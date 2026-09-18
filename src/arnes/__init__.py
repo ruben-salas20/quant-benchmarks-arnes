@@ -1,6 +1,40 @@
+import json
 import subprocess
 import urllib.request
 import urllib.error
+
+
+def tokenizar(texto: str, puerto: int = 8090) -> list[int]:
+    payload = {
+        "content": texto,
+        "add_special": False,
+        "parse_special": False,
+    }
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{puerto}/tokenize",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    return data["tokens"]
+
+
+def cortar(tokens: list[int], profundidad: int, prompt: int = 512) -> tuple[list[int], list[int]]:
+    needed = profundidad + prompt
+    available = len(tokens)
+
+    if available < needed:
+        raise ValueError(
+            f"La lista tiene {available} tokens, pero se necesitan {needed} "
+            f"({profundidad} + {prompt})."
+        )
+
+    return tokens[:profundidad], tokens[profundidad:profundidad + prompt]
 
 
 def main() -> None:
