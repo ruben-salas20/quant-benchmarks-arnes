@@ -4,6 +4,53 @@ import urllib.request
 import urllib.error
 
 
+def completion(cuerpo: dict, puerto: int = 8090) -> dict:
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{puerto}/completion",
+        data=json.dumps(cuerpo).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def medir_punto(prefijo: list[int], nuevo: list[int], puerto: int = 8090, generar: int = 128) -> dict:
+    # Petición 1: si prefijo no está vacío
+    if prefijo:
+        completion({"prompt": prefijo, "n_predict": 0, "cache_prompt": False}, puerto)
+
+    # Petición 2
+    cache_prompt_val = True if prefijo else False
+    resp2 = completion(
+        {
+            "prompt": prefijo + nuevo,
+            "n_predict": generar,
+            "temperature": 0,
+            "ignore_eos": True,
+            "cache_prompt": cache_prompt_val,
+        },
+        puerto,
+    )
+
+    timings = resp2.get("timings", {})
+
+    expected = {
+        "cache_n": len(prefijo),
+        "prompt_n": len(nuevo),
+        "predicted_n": generar,
+    }
+
+    for key in expected:
+        if timings.get(key) != expected[key]:
+            raise RuntimeError(
+                f"{key}: se esperó {expected[key]} pero obtuvo {timings.get(key)}"
+            )
+
+    return timings
+
+
 def tokenizar(texto: str, puerto: int = 8090) -> list[int]:
     payload = {
         "content": texto,
