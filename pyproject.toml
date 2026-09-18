@@ -1,7 +1,7 @@
 [project]
 name = "arnes"
 version = "0.1.0"
-description = "Add your description here"
+description = "Mide prefill, decode, tiempo al primer token y memoria de modelos GGUF sobre llama.cpp"
 readme = "README.md"
 authors = [
     { name = "Ruben Salas", email = "rubend.salasp@uqvirtual.edu.co" }
