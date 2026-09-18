@@ -30,6 +30,10 @@ Fija para todas las mediciones. Cambiar cualquier cosa de aquí obliga a medir t
 Fuente: `src/llama-vocab.cpp` de llama.cpp en el commit `972d2313b` (tag `b11028`), con licencia MIT,
 Copyright (c) 2023-2026 The ggml authors.
 
+Copiado en `carga/llama-vocab.cpp` (183 255 bytes, sha256
+`b9588d7116c11573b378c43bf3c85f87249ad5eb9626324abded4abc7c91e6dc`), con la licencia en
+`carga/LICENSE-llama.cpp`. Va dentro del repo para que la carga no cambie al actualizar llama.cpp.
+
 - **Continuación, sin plantilla de chat.** El modelo recibe los tokens del fichero tal cual y sigue
   escribiendo el código. Se parece a lo que hace `llama-bench`, así que las dos se comparan
   directamente. La plantilla de chat se mide aparte.
