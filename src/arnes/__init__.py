@@ -1,8 +1,13 @@
+from pathlib import Path
+
 import json
 import subprocess
 import time
 import urllib.request
 import urllib.error
+
+
+RAIZ = Path(__file__).resolve().parents[2]
 
 
 def completion(cuerpo: dict, puerto: int = 8090) -> dict:
@@ -133,6 +138,32 @@ def main() -> None:
     print("Hello from arnes!")
 
 
+def argumentos_servidor(modelo: str, ctx: int, puerto: int) -> list[str]:
+    return [
+        "-m", modelo,
+        "-ngl", "99",
+        "--ctx-size", str(ctx),
+        "-fit", "off",
+        "-np", "1",
+        "-fa", "on",
+        "--host", "127.0.0.1",
+        "--port", str(puerto),
+    ]
+
+
+def sha256_fichero(ruta: str) -> str:
+    import hashlib
+    hash_sha256 = hashlib.sha256()
+    with open(ruta, "rb") as f:
+        block_size = 1024 * 1024
+        while True:
+            data = f.read(block_size)
+            if not data:
+                break
+            hash_sha256.update(data)
+    return hash_sha256.hexdigest()
+
+
 def arrancar_servidor(modelo: str, ctx: int, puerto: int = 8090, log: str = "server.log"):
     import socket
     import subprocess
@@ -146,7 +177,7 @@ def arrancar_servidor(modelo: str, ctx: int, puerto: int = 8090, log: str = "ser
 
     import time
 
-    cmd = ["llama-server", "-m", modelo, "-ngl", "99", "--ctx-size", str(ctx), "-fit", "off", "-np", "1", "-fa", "on", "--host", "127.0.0.1", "--port", str(puerto)]
+    cmd = ["llama-server"] + argumentos_servidor(modelo, ctx, puerto)
 
     with open(log, "w") as f:
         proc = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
@@ -189,3 +220,118 @@ def get_last_lines(log: str) -> str:
     with open(log, "r") as f:
         lines = f.readlines()
     return "".join(lines[-3:])
+
+
+def estado_arnes() -> tuple[str, bool]:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    commit = result.stdout.strip()
+
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    has_uncommitted = bool(result.stdout.strip())
+
+    return commit, has_uncommitted
+
+
+
+def configuracion(modelo: str, ctx: int, puerto: int, permitir_cambios: bool) -> dict:
+    import datetime
+    from pathlib import Path
+
+    estado = estado_arnes()
+    if estado[1] and not permitir_cambios:
+        raise RuntimeError("hay cambios sin commit en el arnés: haz commit antes de medir")
+
+    return {
+        "fecha": datetime.datetime.now().astimezone().isoformat(),
+        "modelo": str(Path(modelo).resolve()),
+        "modelo_sha256": sha256_fichero(modelo),
+        "ctx": ctx,
+        "argumentos": argumentos_servidor(modelo, ctx, puerto),
+        "llama_cpp_version": (
+            subprocess.run(
+                ["llama-server", "--version"],
+                cwd=RAIZ,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            + subprocess.run(
+                ["llama-server", "--version"],
+                cwd=RAIZ,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stderr
+        ).strip(),
+        "arnes_commit": estado[0],
+        "arnes_con_cambios": estado[1],
+        "disco": (
+            subprocess.run(
+                ["findmnt", "-n", "-o", "SOURCE", "--target", str(Path(modelo).resolve())],
+                cwd=RAIZ,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        ).strip(),
+        "gpu": (
+            subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+                cwd=RAIZ,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        ).strip(),
+        "vram_libre_mib": vram_libre(),
+        "carga_sha256": sha256_fichero(str(RAIZ / "carga" / "llama-vocab.cpp")),
+    }
+
+
+def medir_tanda(modelo: str, salida: str, ctx: int = 17408, profundidades: tuple = (0, 4096, 16384), repeticiones: int = 5, puerto: int = 8090, permitir_cambios: bool = False) -> dict:
+    from pathlib import Path
+    if Path(salida).resolve().is_relative_to(RAIZ):
+        raise ValueError("la salida no puede estar dentro del repo del arnés")
+
+    config = configuracion(modelo, ctx, puerto, permitir_cambios)
+    config["profundidades"] = profundidades
+    config["repeticiones"] = repeticiones
+    config["prompt"] = 512
+    config["generar"] = 128
+
+    proceso = arrancar_servidor(modelo, ctx, puerto)
+    try:
+        tokens = tokenizar((RAIZ / "carga" / "llama-vocab.cpp").read_text(), puerto)
+        mediciones = []
+        for d in profundidades:
+            prefijo, nuevo = cortar(tokens, d)
+            for j in range(repeticiones + 1):
+                t = medir_punto(prefijo, nuevo, puerto)
+                t["profundidad"] = d
+                t["repeticion"] = j
+                t["calentamiento"] = j == 0
+                mediciones.append(t)
+        memoria = memoria_proceso(proceso.pid)
+    finally:
+        detener_servidor(proceso)
+
+    resultado = {
+        "configuracion": config,
+        "memoria_servidor_mib": memoria,
+        "mediciones": mediciones,
+    }
+    with open(salida, "w") as f:
+        json.dump(resultado, f, indent=2, ensure_ascii=False)
+    return resultado
